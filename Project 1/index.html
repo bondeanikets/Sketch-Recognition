@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Homework 1 Starter</title>
+	<!-- An AMD-loader like RequireJS is necessary for srlib's asynchronous modules -->
+	<script src="require.js"></script>
+	<!-- Load srlib following RequireJS -->
+	<script src="srlib.js"></script>
+	<!-- JQuery provides a very nice set of tools when dealing with AJAX requests -->
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+	<script type="text/javascript">
+    // This max value for this is 20000. If you go above it, it will limit to 20000. There are 10k arrows and 10k not arrows.
+    // I recommend starting small until all your features calculate correctly, because 20000 will take a few min to fetch and calculate.
+    maxResults = 10;
+
+    // The interpretation will automatically be added to each row of csv data for you.
+    // Place the function names to calculate your features here. The function name will be the header of the csv file for that row.
+    featureFunctions = [featureA, featureB, myFeature];
+
+    
+    
+    /* Define your feature functions here */
+    /* Each function only needs to return the feature value */
+    
+	function featureA(sketch) {
+        console.log(sketch); // Console logging might be beneficial to see the structure.
+		/* Basic structure is as follows
+		{
+			points: {id: {x: int, y: int, time: intString}, ...},
+			shapes: [{interpretation: string}], // Shapes should only have 1 entry and the interpretation is all you care about. Either arrow or something else
+			strokes: [{id: string, time: string, points: [pointId1, pointId2, ...]}, ...]
+		}
+		*/
+		return sketch.strokes.length;
+	}
+
+	function featureB(sketch) {
+		return 2;
+	}
+    
+    function myFeature(sketch) {
+        return 3;
+    }
+
+
+
+
+
+
+
+
+
+	//
+	//
+	// Everything below here you shouldn't need to worry about.
+	//
+	//
+    
+    // Begin processing once webpage loaded
+	$(document).ready(function() {
+        features = [['interpretation']];
+		// DO NOT REMOVE THESE LINES
+        for (var i = 0; i < featureFunctions.length; i++) {
+            var f = featureFunctions[i];
+            features[0].push(f.name);
+        }
+        getSketchIds();
+	});
+    
+    function calculateFeatures(sketch) {
+		var row = [];
+		if (sketch.shapes[0].interpretation == 'arrow') {
+			row.push('arrow');
+		} else {
+			row.push('other');
+		}
+
+		// Now just push back all the feature values in order.
+		//row.push(calculateFeatureA(sketch));
+		//row.push(calculateFeatureB(sketch));
+        for (var i = 0; i < featureFunctions.length; i++) {
+            var f = featureFunctions[i];
+            row.push(f(sketch));
+        }
+
+		// Finally push the row to the overall features array.
+		features.push(row);
+	}
+
+	function arrayToObj(array) {
+        var obj = {}
+        for (var i = 0; i < array.length; i++) {
+            var val = array[i];
+            var id = val.id;
+            delete val.id;
+            obj[id] = val;
+        }
+        return obj;
+    }
+
+    // Top answer from https://stackoverflow.com/questions/17836273/export-javascript-data-to-csv-file-without-server-interaction
+    function saveCSV() {
+    	var csvRows = [];
+    	for (var i = 0; i < features.length; i++) {
+    		csvRows.push(features[i].join(','));
+    	}
+
+    	var csvString = csvRows.join('%0A');
+    	var a = document.createElement('a');
+    	a.href = 'data:attachment/csv,' + csvString;
+    	a.target = '_blank';
+    	a.download = 'features.csv';
+    	document.body.appendChild(a);
+    	a.click();
+    }
+
+    function getSketch() {
+    	if (counter == sketchIds.length || counter == maxResults) { saveCSV(); return; } // Reached the last sketch.
+    	var id = sketchIds[counter];
+    	counter++;
+		$.ajax({
+			type: "GET",
+			url: "http://srl-prod1.cs.tamu.edu:7750/getSketches?id=" + id,
+			dataType: 'json',
+			contentType: "application/json",
+			success: function(res) {
+				var sketch = res[0];
+				sketch.points = arrayToObj(sketch.points);
+				document.getElementById('progress').textContent = 'Calculating features for sketch ' + counter + ' of ' + maxResults;
+				calculateFeatures(sketch);
+				getSketch();
+			}
+		});
+    }
+
+	// Load data, populating global list of sketchIds
+	var sketchIds;
+	var counter = 0;
+	function getSketchIds() {
+		$.ajax({url: "http://srl-prod1.cs.tamu.edu:7750/getIds?domain=SketchRec2017", success: function(result) {
+			sketchIds = result;
+			getSketch();
+		}});
+	}
+	</script>
+</head>
+<!-- The body consists simply of a canvas for drawing and a selection list; this display is for the user's benefit, not required -->
+<body>
+
+<div id='progress'>0</div>
+
+</body>
+</html>
