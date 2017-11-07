@@ -1,6 +1,6 @@
 ANIKET SANJIV BONDE [bondeanikets@tamu.edu / (979)-985-8726]
 
-CS 624 – Sketch Recognition (Dr. Hammond)
+CS 624 â€“ Sketch Recognition (Dr. Hammond)
 Project # 01
 
 THE FOLDER CONTAINS:
