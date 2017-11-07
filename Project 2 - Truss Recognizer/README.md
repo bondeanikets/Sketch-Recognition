@@ -28,6 +28,6 @@ Steps:
 ------------------------------------------------------------------------------------
 -------------------------------------Developers-------------------------------------
 ------------------------------------------------------------------------------------
-Aniket Bonde	(UIN: 825009631 email: bondeanikets@tamu.edu)
-Mayank Sharma	(UIN: 426007370 email: mayank.sharma@tamu.edu)
-Niloofar Zarei  (UIN: 225002252 email: n.zarei.3001@tamu.edu)
+Aniket Bonde	(bondeanikets@tamu.edu)
+Mayank Sharma	(mayank.sharma@tamu.edu)
+Niloofar Zarei  (n.zarei.3001@tamu.edu)
