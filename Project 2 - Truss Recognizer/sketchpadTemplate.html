@@ -1,0 +1,374 @@
+
+<html>
+<head>
+  <title>Sketchpad</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="text/javascript" src="sketchpad.js"></script>
+  <script type="text/javascript" src="istraw.js"></script>
+  <script type="text/javascript" src="shortStraw.js"></script>
+  <script type="text/javascript" src="sketchRecTools.js"></script>
+</head>
+
+<body onload="init()">
+  <div id="content">
+    <div>
+      <canvas id="drawCanvas" class="canvaslook" width="400" height="400" ></canvas>
+      <!-- <canvas id="sketchpad" width="400" height="400" ></canvas> -->
+    </div>
+
+    <div>
+      <canvas id="previewCanvas" class="canvaslook" width="400" height="400"></canvas>
+    </div>
+
+    <div>
+      <input type="submit" value="Clear" class="elementlook" onclick="clearButton(drawCanvas, drawContext);">
+      <input type="submit" value="Undo" class="elementlook" onclick="undoButton(drawCanvas, drawContext);">
+      <input type="submit" value="Test" class="elementlook" onclick="testButton();">
+      <select id="algorithm" class="elementlook" onChange="instruct()">
+	      <option value="-----"             >--------------------</option>
+  		  <option value="boundingBox"       >Bounding Box</option>
+        <option value="boundingBoxes"     >Bounding Boxes</option>
+        <option value="centerCentroid"    >Center (Centroid)</option>
+        <option value="centerMidpoint"    >Center (Midpoint)</option>
+        <option value="shortStraw"        >Corner-Finding (ShortStraw)</option>
+        <option value="iStraw"            >Corner-Finding (IStraw)</option>
+  		  <option value="endpoints"         >Endpoints</option>
+  		  <option value="resampleByCount"   >Resample (Count)</option>
+  		  <option value="resampleByDistance">Resample (Distance)</option>
+        <option value="scaleProportion"   >Scale (Proportional)</option>
+        <option value="scaleSquare"       >Scale (Square)</option>
+        <option value="translate"         >Translate</option>
+  		</select>
+      <input type="text" id="argument" class="elementlook" name="argument" maxlength="6" size="6">
+    </div>
+
+    <div>
+      <!-- put output here -->
+    </div>
+
+    <div>
+      <p id="instructions"></p>
+    </div>
+  </div>
+
+  <script>
+
+  function testButton() {
+
+    showPreview();
+    var sketch = getSketch();
+
+    // --------------------------------------------------
+
+    var algorithmElement = document.getElementById("algorithm");
+    var argumentElement = document.getElementById("argument");
+
+    var algorithmName = algorithmElement.options[algorithmElement.selectedIndex].text;
+    var argumentValue = argumentElement.value;
+    if (argumentValue !== "") { argumentValue = Number.parseInt(argumentValue); } // parse arrgument from string to number
+
+    if (algorithmName === "Bounding Box") { displayBoundingBox(sketch); }
+    if (algorithmName === "Bounding Boxes") { displayBoundingBoxes(sketch); }
+    if (algorithmName === "Corner-Finding (IStraw)") { displayCornerFindingIStraw(sketch); }
+    if (algorithmName === "Corner-Finding (ShortStraw)") { displayCornerFindingShortStraw(sketch); }
+    if (algorithmName === "Center (Centroid)") { displayCenterCentroid(sketch); }
+    if (algorithmName === "Center (Midpoint)") { displayCenterMidpoint(sketch); }
+    if (algorithmName === "Endpoints") { displayEndpoints(sketch); }
+    if (algorithmName === "Resample (Count)") { displayResampleByCount(sketch, argumentValue); }
+    if (algorithmName === "Resample (Distance)") { displayResampleByDistance(sketch, argumentValue); }
+    if (algorithmName === "Scale (Proportional)") { displayScaleProportional(sketch, argumentValue); }
+    if (algorithmName === "Scale (Square)") { displayScaleSquare(sketch, argumentValue); }
+    if (algorithmName === "Translate") { displayTranslate(sketch, argumentValue); }
+  }
+
+  function displayBoundingBox(sketch) {
+    var box = SketchRecTools.calculateBoundingBox(sketch);
+
+    // get the strokes
+    var topStroke = {points: [box.topLeft, box.topRight]};
+    var leftStroke = {points: [box.topLeft, box.bottomLeft]};
+    var rightStroke = {points: [box.topRight, box.bottomRight]};
+    var bottomStroke = {points: [box.bottomLeft, box.bottomRight]};
+
+    var boundingStrokes = [topStroke, leftStroke, rightStroke, bottomStroke];
+    var boundingBox = { strokes: boundingStrokes };
+
+
+    previewSketch(sketch, "gray");
+    previewSketch(boundingBox, "red");
+  }
+
+  function displayBoundingBoxes(sketch) {
+
+    var boundingStrokes = [];
+    // iterate through each sketch stroke
+    var strokes = sketch.strokes;
+    strokes.forEach(function(stroke){
+      // wrap the stroke into a sketch
+      var strokeSketch = { strokes: [stroke] };
+
+      var box = SketchRecTools.calculateBoundingBox(strokeSketch);
+
+      // get the strokes
+      var topStroke = {points: [box.topLeft, box.topRight]};
+      var leftStroke = {points: [box.topLeft, box.bottomLeft]};
+      var rightStroke = {points: [box.topRight, box.bottomRight]};
+      var bottomStroke = {points: [box.bottomLeft, box.bottomRight]};
+
+      boundingStrokes.push(topStroke, leftStroke, rightStroke, bottomStroke);
+    });
+
+    var boundingBox = { strokes: boundingStrokes };
+
+    previewSketch(sketch, "gray");
+    previewSketch(boundingBox, "red");
+  }
+
+  function displayEndpoints(sketch) {
+    var endpoints = [];
+    var strokes = sketch.strokes;
+    for (var i = 0; i < strokes.length; i++) {
+      var points = strokes[i].points;
+      var start = points[0];
+      var end = points[points.length-1];
+      endpoints.push(start);
+      endpoints.push(end);
+    }
+
+    previewSketch(sketch, "gray");
+    previewPoints(endpoints, "red");
+  }
+
+  function displayCornerFindingShortStraw(sketch) {
+    var corners = ShortStraw.findShortStrawCorners(sketch);
+
+    previewSketch(sketch, "gray");
+    previewPoints(corners, "red");
+  }
+
+  function displayCornerFindingShortStraw(sketch) {
+    // get the resampled sketch and its corner indices
+    var resampledSketch = SketchRecTools.resampleByDistance(sketch);
+    var sketchCornerIndices = ShortStraw.run(resampledSketch);
+
+    // gather the corners from their indices
+    var corners = [];
+    for (var i = 0; i < resampledSketch.strokes.length; i++) {
+      var resampledPoints = resampledSketch.strokes[i].points;
+      var strokeCornerIndices = sketchCornerIndices[i];
+      for (var j = 0; j < strokeCornerIndices.length; j++) {
+        corners.push(resampledPoints[strokeCornerIndices[j]]);
+      }
+    }
+
+    previewSketch(sketch, "gray");
+    previewPoints(corners, "red");
+  }
+
+  function displayCornerFindingIStraw(sketch) {
+    // get the resampled sketch and its corner indices
+    var resampledSketch = SketchRecTools.resampleByDistance(sketch);
+    var sketchCornerIndices = IStraw.run(resampledSketch);
+
+    // gather the corners from their indices
+    var corners = [];
+    for (var i = 0; i < resampledSketch.strokes.length; i++) {
+      var resampledPoints = resampledSketch.strokes[i].points;
+      var strokeCornerIndices = sketchCornerIndices[i];
+      for (var j = 0; j < strokeCornerIndices.length; j++) {
+        corners.push(resampledPoints[strokeCornerIndices[j]]);
+      }
+    }
+
+    previewSketch(sketch, "gray");
+    previewPoints(corners, "red");
+  }
+
+  function displayEndpoints(sketch) {
+
+    var endpoints = [];
+    var strokes = sketch.strokes;
+    for (var i = 0; i < strokes.length; i++) {
+    	var points = strokes[i].points;
+    	var start = points[0];
+    	var end = points[points.length-1];
+    	endpoints.push(start);
+    	endpoints.push(end);
+    }
+
+    previewSketch(sketch, "gray");
+    previewPoints(endpoints, "red");
+  }
+
+  function displayResampleByCount(sketch, value) {
+
+    if (isNaN(parseInt(value))) { return; }
+    if (value < 1  || value > 200) { return; };
+
+    var resampledSketch = SketchRecTools.resampleByCount(sketch, value);
+    var resampledPoints = [];
+    var resampledStrokes = resampledSketch.strokes;
+    for (var i = 0; i < resampledStrokes.length; i++) {
+      var resampledStroke = resampledStrokes[i];
+      for (var j = 0; j < resampledStroke.points.length; j++) {
+        resampledPoints.push(resampledStroke.points[j]);
+      }
+    }
+
+    previewSketch(sketch, "gray");
+	  previewSketch(resampledSketch, "black");
+    previewPoints(resampledPoints, "red");
+  }
+
+  function displayResampleByDistance(sketch, value) {
+    // handle out-of-range input values
+    if (isNaN(parseInt(value))) { return; }
+    else if (value < 1  || value > 500) { return };
+
+    var resampledSketch = SketchRecTools.resampleByDistance(sketch, value);
+    var resampledPoints = [];
+    var resampledStrokes = resampledSketch.strokes;
+    for (var i = 0; i < resampledStrokes.length; i++) {
+      var resampledStroke = resampledStrokes[i];
+      for (var j = 0; j < resampledStroke.points.length; j++) {
+        resampledPoints.push(resampledStroke.points[j]);
+      }
+    }
+
+    previewSketch(sketch, "gray");
+	  previewSketch(resampledSketch, "black");
+    previewPoints(resampledPoints, "red");
+  }
+
+  function displayTranslate(sketch, value) {
+    // handle out-of-range input values
+    if (isNaN(parseInt(value))) { return; }
+    else if (value < 1  || value > 200) { return };
+
+    // get the bounding box's center
+    var box = SketchRecTools.calculateBoundingBox(sketch);
+    if (box === null) { return; }
+
+    // get the canvas dimensions
+    var canvas = document.getElementById("drawCanvas");
+    var width = canvas.width;
+    var height = canvas.height;
+
+    // get edge distance
+    var leftDistance = box.centerX - 0;
+    var rightDistance = width - box.centerX;
+    var topDistance = box.centerY - 0;
+    var bottomDistance = height - box.centerY;
+
+    // get move travel
+    var moveX = leftDistance < rightDistance ? value : -value;
+    var moveY = topDistance < bottomDistance ? value : -value;
+
+    // get the translated sketch
+    var newSketch = SketchRecTools.translate(sketch, moveX, moveY);
+
+    previewSketch(newSketch, "black");
+  }
+
+  function displayCenterMidpoint(sketch) {
+
+    var canvas = document.getElementById("drawCanvas");
+    var x = canvas.width / 2;
+    var y = canvas.height / 2;
+    var center = {x: x, y: y};
+    var newSketch = SketchRecTools.translateToMidpoint(sketch, center);
+
+    previewSketch(sketch, "LightGray");
+    previewSketch(newSketch, "black");
+  }
+
+  function displayCenterCentroid(sketch) {
+    var canvas = document.getElementById("drawCanvas");
+    var x = canvas.width / 2;
+    var y = canvas.height / 2;
+    var center = {x: x, y: y};
+    var newSketch = SketchRecTools.translateToCentroid(sketch, center);
+
+    previewSketch(sketch, "LightGray");
+    previewSketch(newSketch, "black");
+  }
+
+  function displayScaleProportional(sketch, value) {
+    if (isNaN(parseInt(value))) { return; }
+    if (value < 50  || value > 300) { return; };
+
+    var newSketch = SketchRecTools.scaleProportional(sketch, value);
+    previewSketch(sketch, "LightGray");
+    previewSketch(newSketch, "black");
+  }
+
+  function displayScaleSquare(sketch, value) {
+    if (isNaN(parseInt(value))) { return; }
+    if (value < 50  || value > 300) { return; };
+
+    var newSketch = SketchRecTools.scaleSquare(sketch, value);
+    previewSketch(sketch, "LightGray");
+    previewSketch(newSketch, "black");
+  }
+
+  // ----- helper methods -----
+
+  function instruct() {
+
+    //
+    var hasSelected = false;
+
+  	// get the name of the dropdown menu's current selection
+  	var algorithmElement = document.getElementById("algorithm");
+  	var instructionsElement = document.getElementById("instructions");
+  	var argumentElement = document.getElementById("argument");
+
+  	var algorithmName = algorithmElement.options[algorithmElement.selectedIndex].text;
+
+  	// display the corresponding instructions
+    if (algorithmName === "Corner-Finding (ShortStraw)") {
+      instructionsElement.innerHTML = "this corner-finder only works on polylines";
+      hasSelected = true;
+    }
+
+    if (algorithmName === "Resample (Count)") {
+  		argumentElement.value = 32;
+  		instructionsElement.innerHTML = "Enter value between 1 and 200";
+  		hasSelected = true;
+  	}
+
+  	if (algorithmName === "Resample (Distance)") {
+  		argumentElement.value = 50;
+  		instructionsElement.innerHTML = "Enter value between 1 and 500";
+  		hasSelected = true;
+  	}
+
+    if (algorithmName === "Translate") {
+  		argumentElement.value = 50;
+  		instructionsElement.innerHTML = "Enter value between 1 and 200";
+  		hasSelected = true;
+  	}
+
+    if (algorithmName === "Scale (Proportional)") {
+  		argumentElement.value = 100;
+  		instructionsElement.innerHTML = "Enter value between 50 and 300";
+  		hasSelected = true;
+  	}
+
+    if (algorithmName === "Scale (Square)") {
+  		argumentElement.value = 100;
+  		instructionsElement.innerHTML = "Enter value between 50 and 300";
+  		hasSelected = true;
+  	}
+
+    //
+  	if (!hasSelected) {
+  		argumentElement.value = "";
+  		instructionsElement.innerHTML = "";
+  	}
+  }
+
+
+  </script>
+</body>
+</html>
