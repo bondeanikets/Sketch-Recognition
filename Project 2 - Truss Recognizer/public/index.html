@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+    <link rel="stylesheet" type="text/css" href="style.css">
+	<title>Homework 2 Starter</title>
+	<!-- An AMD-loader like RequireJS is necessary for srlib's asynchronous modules -->
+	<script src="require.js"></script>
+	<!-- Load srlib following RequireJS -->
+	<script src="srlib.js"></script>
+	<!-- Include sketchio for converting standard sketch to compact one -->
+	<script src="sketchio.js"></script>
+	<!-- JQuery provides a very nice set of tools when dealing with AJAX requests -->
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+	<script type="text/javascript" src="shortStraw.js"></script> 
+    <script type="text/javascript" src="istraw.js"></script>
+	<script type="text/javascript" src="sketchRecTools.js"></script>
+    
+
+</head>
+<body>
+	<div>Data location</div>
+<!--	<div><input type='radio' name='dataLocation' value='local'>Load data from local data file <input type="file" name="file" id="file"></div>-->
+<!--
+	<div><input type='radio' name='dataLocation' value='trussOnly' checked>Load trusses ONLY from local server</div>
+	<div><input type='radio' name='dataLocation' value='otherOnly'>Load non-trusses ONLY from local server</div>
+    <div><input type='radio' name='dataLocation' value='all'>Load ALL data from local server</div>
+-->
+<!--	<div>Sketch Limit <input type="number" name="limit" id="limit" value='10'></div>-->
+	<button id='start'>Start Processing</button>
+	<div id='progress'>Progress will show here.</div>
+	<table>
+		<tr>
+			<td></td>
+			<td>Contains truss</td>
+			<td>No truss</td>
+		</tr>
+		<tr>
+			<td>Predicted truss</td>
+			<td id='TP1'>0</td>
+			<td id='FP1'>0</td>
+		</tr>
+		<tr>
+			<td>Predicted no truss</td>
+			<td id='FN1'>0</td>
+			<td id='TN1'>0</td>
+		</tr>
+	</table>
+    <br><br>
+    <table>
+		<tr>
+			<td></td>
+			<td>IDs match</td>
+			<td>IDs not match</td>
+		</tr>
+		<tr>
+			<td>Have predicted IDs</td>
+			<td id='TP2'>0</td>
+			<td id='FP2'>0</td>
+		</tr>
+		<tr>
+			<td>No predicted IDs</td>
+			<td id='FN2'>0</td>
+			<td id='TN2'>0</td>
+		</tr>
+	</table>
+<!--	<div id='strokeIdResults'></div>-->
+<!--
+    <br><br><br><br>
+    <div>
+      <canvas id="previewCanvas" class="canvaslook" width="1200" height="1200"></canvas>
+    </div>
+    <div><input type='radio' name='localDataLocation' value='trussOnly'>Load trusses from local server</div>
+	<div><input type='radio' name='localDataLocation' value='nonTrussOnly' checked>Load non-trusses from local server</div>
+    <div>Sketch Number <input type="number" name="sketchNumber" id="sketchNum" value='1'><button id='showSketch'>View</button></div>
+-->
+	
+    
+	<script type="text/javascript">
+	/**
+	 * Checks a sketch to see if it contains a truss.
+	 * 
+	 * This function MUST return an object with the following 2 key-value pairs.
+	 * containsTruss : true OR false
+	 * trussStrokeIds : [id1, id2, ...] OR [] if no truss
+	 */
+	function checkSketchForTruss(sketch, visualize) {
+		var output = {'containsTruss': false, 'trussStrokeIds': [] };
+		var strokeIds = new Set();
+		// DO SOMETHING HERE TO FIND IF THERE IS A TRUSS AND WHAT STROKE IDS IT IS MADE FROM
+		
+		// Instead of an array, you can use a Set, but make sure to return an array. Something along these lines should work.
+		// var strokeIds = new Set();
+		// strokeIds.add(id);
+		// output.trussStrokeIds = [...strokeIds]; // This is valid syntax and turns the set into an array.
+		//sketch = SketchIo.simplify(sketch);
+        //console.log('simplified sketch')
+        console.log(sketch)
+		if (!sketch) {
+			return output;
+		}
+
+ 
+		// Recognition begins here...
+		// get the resampled sketch and its corner indices
+		var SamplingDist = SketchRecTools.determineResampleSpacing(sketch);
+	    var resampledSketch = SketchRecTools.resampleByDistance(sketch, SamplingDist);
+
+	    // Note: Resampling somehow removes the stroke-ids, which are needed later
+	    for (var i = 0; i < resampledSketch.strokes.length; i++) {
+	    	resampledSketch.strokes[i].id = sketch.strokes[i].id;
+	    }
+
+		//console.log(resampledSketch)
+	    var sketchCornerIndices = IStraw.run(resampledSketch);
+		//console.log(sketchCornerIndices)
+
+	    // gather the corners from their indices
+	    var corners = [];
+	    var edgeCount = 0;
+	    var selectedStrokes = [];
+	    for (var i = 0; i < resampledSketch.strokes.length; i++) {
+			var resampledPoints = resampledSketch.strokes[i].points;
+			var strokeCornerIndices = sketchCornerIndices[i];
+			var isAllLines = true;
+			var arrowEndProximity = 0;
+			var isArrow = false;
+			var isSingleLine = false;
+
+			if (strokeCornerIndices.length == 2 && 
+				ShortStraw.isLine(resampledPoints, strokeCornerIndices[0], strokeCornerIndices[1])) {
+				isSingleLine = true;
+				corners.push(resampledPoints[strokeCornerIndices[0]]);
+				corners.push(resampledPoints[strokeCornerIndices[1]]);
+				//ignore short lines 
+				// if (proximityCheck(resampledPoints[strokeCornerIndices[0]],resampledPoints[strokeCornerIndices[1]], 2*SamplingDist)) {
+				// 	continue;
+				// }
+			} else {
+
+				for (var j = 0; j < strokeCornerIndices.length; j++) {
+	                //console.log("entered second for loop")
+					corners.push(resampledPoints[strokeCornerIndices[j]]);
+
+
+					if (!(j==0 || ShortStraw.isLine(resampledPoints, strokeCornerIndices[j-1], strokeCornerIndices[j]))) {
+						isAllLines = false;
+					}               
+	                
+
+					// Arrow Elimination
+					// Arrows drawn in multiple strokes will get eliminated in substroke count check done later
+					// Here we are eliminating arrows drawn in single stroke.
+					// The idea is that the endpoint of an arrow would be in proximity of at least 2 other corners of that stroke.
+					if ( (j != strokeCornerIndices.length - 1) && proximityCheck(resampledPoints[strokeCornerIndices[j]], resampledPoints[strokeCornerIndices[strokeCornerIndices.length - 1]], 7*SamplingDist)) {
+						arrowEndProximity += 1;
+					}
+	                
+	                //console.log("after second if")
+				}
+
+				// Check for single stroke arrow 
+				if (arrowEndProximity >= 2) {
+					isArrow = true;
+					console.log("Visual Single stroke arrow ");
+				}
+
+				// Check for usual Arrows drawn in 2 strokes "->"
+				if (i!=0 && 
+					(sketchCornerIndices[i].length == 3) && sketchCornerIndices[i-1].length == 2 &&
+						proximityCheck(resampledSketch.strokes[i].points[sketchCornerIndices[i][0]], 
+							resampledSketch.strokes[i].points[sketchCornerIndices[i][1]], 7*SamplingDist) &&
+						( proximityCheck(resampledSketch.strokes[i].points[sketchCornerIndices[i][1]], 
+							resampledSketch.strokes[i-1].points[sketchCornerIndices[i-1][1]], 4*SamplingDist) || 
+							proximityCheck(resampledSketch.strokes[i].points[sketchCornerIndices[i][1]], 
+								resampledSketch.strokes[i-1].points[sketchCornerIndices[i-1][0]], 4*SamplingDist)
+						) 	) {
+					isArrow = true;
+					console.log("Visual simple 2 stroke arrow ");
+					//remove last stroke
+					strokeIds.delete(resampledSketch.strokes[i-1].id);
+		    		edgeCount -= sketchCornerIndices[i-1].length-1;
+		    		if (visualize){
+		    			selectedStrokes.pop();
+		    		}
+				} 
+
+			}
+            
+	        
+			if (i!=0 && sketchCornerIndices[i].length == 2 && (sketchCornerIndices[i-1].length == 3) &&
+					proximityCheck(resampledSketch.strokes[i-1].points[sketchCornerIndices[i-1][0]], 
+						resampledSketch.strokes[i-1].points[sketchCornerIndices[i-1][1]], 7*SamplingDist) &&
+					( proximityCheck(resampledSketch.strokes[i].points[sketchCornerIndices[i][1]], 
+						resampledSketch.strokes[i-1].points[sketchCornerIndices[i-1][1]], 4*SamplingDist) || 
+						proximityCheck(resampledSketch.strokes[i].points[sketchCornerIndices[i][0]], 
+							resampledSketch.strokes[i-1].points[sketchCornerIndices[i-1][1]], 4*SamplingDist) 
+					)) {
+				isArrow = true;
+				console.log("Visual 2 stroke arrow part");
+				// The head is already not present in selected Strokes due to single stroke arrow check
+			}   
+
+
+	    	// PolyLine Test as per PaleoSketch paper and include it in trussStrokeIds if the required condition satisfies
+	    	var DCRvalue = calculateDCR(resampledPoints);
+	    	// count number of lines 
+	    	var subStrokeCount = strokeCornerIndices.length - 1;
+	    	// Additional check for truss: excluding strokes with less than 4 corners 
+	    	// Minimum consideration should be a triangle with 4 corners or 3 sides
+	    	if ( //!(subStrokeCount < 3) && 
+	    		!isArrow && 
+	    		(isSingleLine || ((DCRvalue > 8.0 && subStrokeCount < 10) || (isAllLines && DCRvalue > 4))))  {
+	    		strokeIds.add(resampledSketch.strokes[i].id);
+	    		edgeCount += subStrokeCount;
+	    		if (visualize){
+	    			selectedStrokes.push(resampledPoints);
+	    		}
+	    	}
+            
+//    		console.log('Visual Stroke ID is: ' + resampledSketch.strokes[i].id);
+//			console.log("Visual Single Line : " + isSingleLine);
+//			console.log("Visual Arrow Check : " + isArrow);	
+//			console.log("Visual DCRvalue : " + DCRvalue);
+
+	    	
+	    }
+
+
+	    //console.log(corners);
+
+	    // For Loop and calculate
+	    // 1. Adjacency Matrix 
+	    // 2. Proximity Matrix
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+		if (strokeIds.size == 0) {
+			//console.log('strokeIds set is empty after ployline check and arrow elimination');
+			//visualizeSketch(resampledSketch, corners, selectedStrokes);
+			return output;
+		}
+
+
+		var proximityMatrix = [];
+		var proximityMatrixStrokePoints = [];
+		var reducedCorners = [];
+
+		for (var i = 0; i < resampledSketch.strokes.length; i++) {
+			if (strokeIds.has(resampledSketch.strokes[i].id)) {
+				var resampledPoints = resampledSketch.strokes[i].points;
+				var strokeCornerIndices = sketchCornerIndices[i];
+				for (var j = 0; j < strokeCornerIndices.length; j++) {
+					reducedCorners.push(resampledPoints[strokeCornerIndices[j]]);
+				}
+			}
+		}
+
+		var mergedPoints = [];
+        //console.log('entering proximity check')
+	    for (var i = 0; i < reducedCorners.length; i++) {
+	    	proximityMatrix[i] = new Array(reducedCorners.length).fill(0);
+//           console.log('in proximity check')
+			// upper-triangular proximity matrix
+	    	for (var j = i+1; j < reducedCorners.length; j++) {
+	    		proximityMatrix[i][j] = proximityCheck(reducedCorners[i], reducedCorners[j], 3*SamplingDist);
+	    	}	    	
+    		if (!(proximityMatrix[i].reduce((a, b) => a + b, 0) == 0)) {
+    			var cornerIndicesToMerge = proximityMatrix[i].reduce((a, e, i) => (e === 1) ? a.concat(i) : a, []);
+    			cornerIndicesToMerge.push(i);
+    			mergedPoints.push(mergePoints(reducedCorners, cornerIndicesToMerge));
+	    		//console.log(cornerIndicesToMerge);
+    		}
+
+//            console.log('eaftrer first for loop' + i)
+	    }
+
+	    // Apply 3 Golden Rules plus 1 Platinum rule
+	    // 1. Shapes cannot have more than 4 sides
+	    // 2. Every Node must be connected to a triangle
+	    // 3. Beams cannot pass through a node---------------Not to implement for now
+	    // 4. No nodes in the middle of beam-----------------Not to implement for now
+	    // 5. Our Check: Either triangular shapes or degree check
+
+
+	    var cornerDegrees = [];
+	    var offset = 0;
+
+	    for (var i = 0; i < resampledSketch.strokes.length; i++) {
+	    	if (strokeIds.has(resampledSketch.strokes[i].id)) {
+				var resampledPoints = resampledSketch.strokes[i].points;
+				strokeCornerDegreesArray = new Array(sketchCornerIndices[i].length).fill(0)
+				var strokeCornerIndices = sketchCornerIndices[i];
+
+				for (var j = 0; j < strokeCornerIndices.length; j++) {
+					if ((j == 0) || (j == strokeCornerIndices.length - 1)) {
+						strokeCornerDegreesArray[j] = 1 + proximityMatrix[offset + j].reduce((a, b) => a + b, 0) 
+						+ (proximityMatrix.map(function(value,index) { return value[offset + j]; })).reduce((a, b) => a + b, 0);
+					}
+					else {
+						strokeCornerDegreesArray[j] = 2 + proximityMatrix[offset + j].reduce((a, b) => a + b, 0)
+						+ (proximityMatrix.map(function(value,index) { return value[offset + j]; })).reduce((a, b) => a + b, 0);
+					}
+
+
+				}	
+				cornerDegrees.push(strokeCornerDegreesArray)		
+				offset += strokeCornerIndices.length;
+			}
+		}
+        //console.log('these are corner indices', sketchCornerIndices)
+        //console.log('these are corner degrees', cornerDegrees)
+//        console.log('outside of everything')
+		//resampledSketch.strokes.splice(14,1);
+		console.log('reduced corners:', reducedCorners);
+
+		var currentStrokeIndex = 0;
+		for (var i = 0; i < resampledSketch.strokes.length; i++) {
+			var isSquare = false;
+			var isSmallLine = false;
+			var isIndividualBigLine = false;
+			var isAxes = false;
+			if (strokeIds.has(resampledSketch.strokes[i].id)) {
+				var resampledPoints = resampledSketch.strokes[i].points;
+				var strokeCornerIndices = sketchCornerIndices[i];
+
+				for (var j = 0; j < strokeCornerIndices.length; j++) {
+					if((cornerDegrees[currentStrokeIndex][j] ==  2) && (strokeCornerIndices.length > 4)) {
+						if ((!((j == 0) || (j == strokeCornerIndices.length - 1))) && ((cornerDegrees[currentStrokeIndex][j-1] < 3) && (cornerDegrees[currentStrokeIndex][j+1] < 3))) {
+								console.log('Square Detected with strokeId: ', resampledSketch.strokes[i].id); 
+								isSquare = true;
+								strokeIds.delete(resampledSketch.strokes[i].id);
+								break;
+						}
+					}
+				}
+
+				if ((strokeCornerIndices.length == 2) && (!isSquare) && (proximityCheck(resampledPoints[strokeCornerIndices[0]], resampledPoints[strokeCornerIndices[1]], 3*SamplingDist))) {
+					console.log('Small Line Detected with strokeId: ', resampledSketch.strokes[i].id)
+					isSmallLine = true;
+					strokeIds.delete(resampledSketch.strokes[i].id);	
+				}
+
+
+				if ((strokeCornerIndices.length == 2) && (!isSquare) && (!isSmallLine)) {
+					var count = 0;
+					for (var k = 0; k < reducedCorners.length; k++) {
+						count += proximityCheck(resampledPoints[strokeCornerIndices[0]], reducedCorners[k], 1 * SamplingDist) + proximityCheck(resampledPoints[strokeCornerIndices[1]], reducedCorners[k], 1 * SamplingDist)
+					}
+					var degreeBool = (cornerDegrees[currentStrokeIndex][0] == 1) || (cornerDegrees[currentStrokeIndex][1] == 1)
+
+					if (count == 2 || degreeBool) {
+						console.log('Individual Big Line Detected with strokeId: ', resampledSketch.strokes[i].id)
+						isIndividualBigLine = true;
+						strokeIds.delete(resampledSketch.strokes[i].id);
+					}	
+				}
+
+
+
+				if ((strokeCornerIndices.length == 3) && (!isSquare) && (!isSmallLine) && (!isIndividualBigLine)) {
+					var count = 0;
+					for (var k = 0; k < reducedCorners.length; k++) {
+						count += proximityCheck(resampledPoints[strokeCornerIndices[0]], reducedCorners[k], 1 * SamplingDist) + proximityCheck(resampledPoints[strokeCornerIndices[2]], reducedCorners[k], 1 * SamplingDist)
+					}
+
+					if (count == 2) {
+						console.log('Axes Detected with strokeId: ', resampledSketch.strokes[i].id)
+						isAxes = true;
+						strokeIds.delete(resampledSketch.strokes[i].id);
+					}	
+				}
+
+				currentStrokeIndex ++;
+			}
+			if (isSquare || isSmallLine || isIndividualBigLine || isAxes) {
+				continue;
+			}			
+		}
+
+		if (strokeIds.size == 1) {
+			var currentStrokeIndex = 0;
+			for (var i = 0; i < resampledSketch.strokes.length; i++) {
+				var isSingleStrokeTriangle = false;
+				if (strokeIds.has(resampledSketch.strokes[i].id)) {
+					var resampledPoints = resampledSketch.strokes[i].points;
+					var strokeCornerIndices = sketchCornerIndices[i];
+
+					if((strokeCornerIndices.length == 4) &&  (proximityCheck(resampledPoints[strokeCornerIndices[0]], resampledPoints[strokeCornerIndices[strokeCornerIndices.length - 1]], 3*SamplingDist)) && (cornerDegrees[currentStrokeIndex][1] == 2) && (cornerDegrees[currentStrokeIndex][2] == 2)) {
+							console.log('Single Stroke Triangle Detected with strokeId: ', resampledSketch.strokes[i].id);
+							isSingleStrokeTriangle = true;
+							strokeIds.delete(resampledSketch.strokes[i].id);					
+					}
+					currentStrokeIndex ++;
+				}
+				if (isSingleStrokeTriangle) {
+					break;
+				}			
+			}
+		}
+
+	    // Rule 1 implementation: Check for relation E >= 2C - 5
+	    // Calculate number of unique corners and compare with edgeCount
+	    // Unique corners = corners.length - number of ones in upper half of proximityMatrix
+	    var proximalCorners = 0;
+	    for (var i=0; i<proximityMatrix.length-1; i++) {
+	    	for (var j=i+1; j<proximityMatrix.length; j++) {
+	    		if (proximityMatrix[i][j] == 1) {
+	    			proximalCorners ++;
+	    		}
+	    	}
+	    }
+	    var rule1Prediction = (edgeCount >= 2*(corners.length - proximalCorners) - 5);
+
+		// output.trussStrokeIds = strokeIds;  
+		output.trussStrokeIds = [...strokeIds]; //Using Set instead of array
+        //console.log(output.trussStrokeIds)
+        //console.log(selectedStrokes)
+//        console.log("corners array is:")
+        //console.log(corners)
+
+        var selectedStrokes = [];
+        for (var i = 0; i < resampledSketch.strokes.length; i++) {
+        	if (strokeIds.has(resampledSketch.strokes[i].id)) {
+        		selectedStrokes.push(resampledSketch.strokes[i].points)
+        	}
+        }
+
+
+	    var reducedCorners = [];
+
+		for (var i = 0; i < resampledSketch.strokes.length; i++) {
+			if (strokeIds.has(resampledSketch.strokes[i].id)) {
+				var resampledPoints = resampledSketch.strokes[i].points;
+				var strokeCornerIndices = sketchCornerIndices[i];
+				for (var j = 0; j < strokeCornerIndices.length; j++) {
+					reducedCorners.push(resampledPoints[strokeCornerIndices[j]]);
+				}
+			}
+		}
+
+		if (strokeIds.size == 0) {
+			console.log('strokeIds set is empty after every check');
+			//visualizeSketch(resampledSketch, corners, [], selectedStrokes);
+			return output;
+		}
+        else{
+            output.containsTruss = true;
+        }
+
+
+        if (visualize){
+            visualizeSketch(resampledSketch, corners, reducedCorners, selectedStrokes, mergedPoints);
+        }
+        
+		return output;
+	}
+	
+    var FP1 = 0;
+    var FN1 = 0;
+    var TP1 = 0;
+    var TN1 = 0;
+
+    var FP2 = 0;
+    var FN2 = 0;
+    var TP2 = 0;
+    var TN2 = 0;
+        
+    function performanceUpdate(sketch, output){
+        //tp2 - id's match
+        //tn2 - not a truss - tn1 + ids empty
+        //fp2 - not a truss recognized as truss - fp1
+        //fn2 - fn1
+        
+        if (sketch.shapes.length==0 || sketch.shapes[0].interpretation != "truss"){ // sketch is not truss 
+            if (output.containsTruss){ //recognized as truss
+                FP1++
+                FP2++
+            }
+            else { //not recognized as truss
+                TN1++
+                //if (output.trussStrokeIds.length == 0){
+                    TN2++
+                //}
+            }
+        }
+        else{ //sketch is truss
+            var correctIds = sketch.shapes[0].subElements 
+            if (output.containsTruss){ //recognized as truss
+                TP1++
+            var idsMatch = true; // Until we prove otherwise
+            var tempAns = new Set(output.trussStrokeIds);
+            var tempSketch = new Set(correctIds);
+                for (var elem of tempAns) { // Stupid set iteration not using for in like a normal object...
+                    if (!tempSketch.has(elem)){
+                        idsMatch = false;
+                    }
+                }
+                if (idsMatch){
+                    TP2++;
+                }else{
+                    FN2++;
+                }   
+            }
+            else{ //not recognized as truss
+                FN1++
+                FN2++
+            }            
+        }        
+    }   
+        
+    function displayStats() {
+		document.getElementById('TP1').textContent = TP1;
+		document.getElementById('FP1').textContent = FP1;
+		document.getElementById('FN1').textContent = FN1;
+		document.getElementById('TN1').textContent = TN1;
+            
+        document.getElementById('TP2').textContent = TP2;
+		document.getElementById('FP2').textContent = FP2;
+		document.getElementById('FN2').textContent = FN2;
+		document.getElementById('TN2').textContent = TN2;
+	}
+
+
+	function proximityCheck(corner1, corner2, threshold) {
+		var dist = Math.sqrt(Math.pow((corner1.y - corner2.y),2) + Math.pow((corner1.x - corner2.x),2));
+		var return_val = (dist < threshold) ? 1 : 0;
+		return return_val
+	}
+
+
+	function calculateDCR(points) {
+		var n = points.length;
+		var tail = Math.ceil(n/20);
+		var maxChange = Number.MIN_VALUE;
+		var avgChangeSum = 0;
+        for(var i=tail; i < n-tail ; i++) {
+			delX = points[i+1].x - points[i].x;
+			delY = points[i+1].y - points[i].y;
+			delXprev = points[i].x - points[i-1].x;
+			delYprev = points[i].y - points[i-1].y;
+			// Math.atan2(y,x) takes care of corner cases for +Pi/2 & -Pi/2
+			var val = Math.atan2(delXprev*delY - delX*delYprev, delX*delXprev + delY*delYprev);
+			var absval = Math.abs(val);
+			if (maxChange < absval) 	maxChange = absval;
+			avgChangeSum += absval;
+        }
+
+		if (!avgChangeSum) {return -1;}
+		return (maxChange * (n - 2*tail))/ avgChangeSum;
+	}
+	
+	
+	
+	function mergePoints(reducedCorners, cornerIndicesToMerge) {
+		var mergedPoint = new Object();
+		mergedPoint.x = 0;
+		mergedPoint.y = 0;
+		for (i = 0; i < cornerIndicesToMerge.length; i++) {
+			mergedPoint.x += reducedCorners[cornerIndicesToMerge[i]].x;
+			mergedPoint.y += reducedCorners[cornerIndicesToMerge[i]].y;
+		}
+
+		mergedPoint.x /= cornerIndicesToMerge.length;
+		mergedPoint.y /= cornerIndicesToMerge.length;
+		return mergedPoint;
+	}
+	
+	
+	
+	//
+	//
+	// Everything below here you shouldn't need to worry about.
+	//
+	//
+        
+    function readJson(fileName) {
+       var contents;
+       var xhttp = new XMLHttpRequest();
+        //NOTE: put a try/catch statement here to check data.JSON exists
+       xhttp.onreadystatechange = function() {
+          if (this.readyState === 4 && this.status === 200) {
+             contents = JSON.parse(this.response);
+        }
+       };
+       xhttp.open("GET", fileName, false);
+       xhttp.send();
+       return contents;
+    }    
+	
+	//var rows = [['mongoId', 'id', 'guessTruss', 'isTruss', 'guessIds', 'realIds', 'shapeFoundMatch', 'idsMatch']];
+
+	/**
+	 * Generates an RFC4122v4-compliant GUID
+	 *
+	 * @return {string} GUID
+	 */
+	var setId = function() {
+		return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+			var r = Math.random()*16|0, v = c === 'x' ? r : (r&0x3|0x8);
+			return v.toString(16);
+		});
+	}
+	
+	function arrayToObj(array) {
+        var obj = {}
+        for (var i = 0; i < array.length; i++) {
+            var val = array[i];
+            var id = val.id || setId(); // Set a new id if no id is found
+            delete val.id;
+            obj[id] = val;
+        }
+        return obj;
+    }
+        
+        function saveJSON(data) {
+//    	var csvRows = [];
+//    	for (var i = 0; i < rows.length; i++) {
+//    		csvRows.push(rows[i].join(','));
+//    	}
+//
+//    	var csvString = csvRows.join('\n');
+        var jsonData = new Blob([data], { type: 'application/json' });
+        var jsonURL = URL.createObjectURL(jsonData);
+    	var a = document.createElement('a');
+        
+    	a.href = jsonURL;
+    	a.target = '_blank';
+    	a.download = 'results.json';
+    	document.body.appendChild(a);
+    	a.click();
+    }
+
+    // Top answer from https://stackoverflow.com/questions/17836273/export-javascript-data-to-csv-file-without-server-interaction
+//    
+
+//    function getSketch() {
+//    	if (counter == sketchIds.length || counter == limit) { // Reached the last sketch.
+//			displayStats();
+//			saveCSV();
+//			return;
+//		}
+//    	var id = sketchIds[counter];
+//    	counter++;
+//		$.ajax({
+//			type: "GET",
+//			url: "http://srl-prod1.cs.tamu.edu:7750/getSketches?id=" + id,
+//			dataType: 'json',
+//			contentType: "application/json",
+//			success: function(res) {
+//				var sketch = res[0];
+//				sketch.points = arrayToObj(sketch.points);
+//				document.getElementById('progress').textContent = 'Checking sketch  ' + counter + ' of ' + limit;
+//				compareAndLogStats(sketch, checkSketchForTruss(sketch, false));
+//				getSketch();
+//			}
+//		});
+//    }
+     var finalOutput = []
+    function getSketches(filename){
+        var sketchesArray = readJson(filename)
+        limit = sketchesArray.length;
+        //if (limit>sketchesArray.length){limit = sketchesArray.length}
+        for (var counter=0; counter<limit; counter++){
+            var sketch = sketchesArray[counter];
+            document.getElementById('progress').textContent = 'Checking sketch  ' + (counter+1) + ' of ' + limit;
+            output = checkSketchForTruss(sketch,false)
+            finalOutput.push(output);
+            performanceUpdate(sketch,output)
+            //console.log(counter+1)
+            //compareAndLogStats(sketch, checkSketchForTruss(sketch, false));
+        }
+        displayStats();
+        //console.log(finalOutput)
+        saveJSON(JSON.stringify(finalOutput));
+        //displayStats();
+        //saveCSV(); ---------- change to saveJSON
+        return;
+                
+    }    
+    
+    
+        
+    
+    var sketchIds;
+	var counter = 0;
+	// Load data from server, populating global list of sketchIds
+//	function getSketchesFromServer(interpretation) {
+//		$.ajax({url: "http://srl-prod1.cs.tamu.edu:7750/getIds?domain=SketchRec2017HW2&interpretation=" + interpretation, success: function(result) {
+//			sketchIds = result;
+//			if (limit > sketchIds.length) { limit = sketchIds.length; } // In case there are fewer sketches than the user selected limit.
+//			getSketch();
+//		}});
+//	}
+        
+	
+//	function getSketchesFromFile() {
+//		var file = document.getElementById('file').files[0];
+//		var reader = new FileReader();
+//		document.getElementById('progress').textContent = 'Check console log for progress updates.';
+//		reader.onload = function(progressEvent) {
+//			// Read line by line
+//			var lines = this.result.split('\n');
+//			if (limit > lines.length) { limit = lines.length; } // In case there are fewer lines than the user selected limit.
+//			for(var line = 0; line < limit; line++){
+//				if (lines[line] == '') { continue; }
+//				var sketch = JSON.parse(lines[line]);
+//				delete sketch.shapes;
+//				delete sketch.substrokes;
+//				sketch.points = arrayToObj(sketch.points);
+//				console.log('Checking sketch ' + (line + 1) + ' of ' + limit);
+//				compareAndLogStats(JSON.parse(lines[line]), checkSketchForTruss(sketch, false)); // Reparse as the sketch param in case they change anything.
+//			}
+//			displayStats();
+//			saveCSV();
+//		};
+//		
+//		reader.readAsText(file);
+//	}
+	
+	function findParentStrokes(sketch, shapeId) {
+		var shape = sketch.shapes[shapeId];
+		for (var i = 0; i < shape.subElements.length; i++) {
+			var subElemId = shape.subElements[i];
+			if (sketch.shapes[subElemId] != undefined) { // Found subElem in shapes
+				var subElem = sketch.shapes[subElemId];
+				if (subElem.interpretation === 'node') { // Ignore nodes
+					continue;
+				} else if (subElem.interpretation === 'line') { // Find stroke id
+					var strokeSubElemId = subElem.subElements[0];
+					if (sketch.substrokes[strokeSubElemId] != undefined) { // Found line subElement id in substrokes. Get substroke's parent Id
+						sketch.trussStrokeIds.add(sketch.substrokes[strokeSubElemId].parent);
+					} else if (sketch.strokes[strokeSubElemId] != undefined) { // Subelement was a parent stroke, so use that id.
+						sketch.trussStrokeIds.add(strokeSubElemId);
+					}
+				} else { // Subelem is some other shape
+					findParentStrokes(sketch, subElemId);
+				}
+			} else if (sketch.strokes[subElemId] != undefined) { // Check in strokes (some older versions of sketches don't store lines as a shape)
+				sketch.trussStrokeIds.add(subElemId);
+			} else if (sketch.substrokes[subElemId] != undefined) { // And check in substrokes for same reason as strokes
+				sketch.trussStrokeIds.add(sketch.substrokes[subElemId].parent);
+			}
+		}
+	}
+	
+	// 4 cases for if a truss was found or not. These get reset in the start button onclick.
+
+	// All or nothing accuracy for strokeIds, so just track if they match entirely or not.
+	var strokeIdMatches = 0;
+//	function compareAndLogStats(sketch, ans) {
+//		sketch.shapes = arrayToObj(sketch.shapes);
+//		//sketch.substrokes = arrayToObj(sketch.substrokes);
+//		sketch.trussStrokeIds = new Set();
+//		
+//		var row = [];
+//		row.push(sketch['_id']);
+//		row.push(sketch.id);
+//		row.push(ans.containsTruss);
+//		
+//		// This finds the answer data for the original sketch. Could probably be factored out of this function, but for the homework starter files I'm tired and this works fine anyway.
+//		sketch.containsTruss = false;
+//		Object.keys(sketch.shapes).forEach(function(key) {
+//			var shape = sketch.shapes[key];
+//			if (shape.interpretation === 'truss') {
+//				sketch.containsTruss = true;
+//				findParentStrokes(sketch, key);
+//			}
+//		});
+//		
+//		row.push(sketch.containsTruss);
+//		row.push('"' + JSON.stringify([...new Set(ans.trussStrokeIds)]).replace(/"/g, '') + '"'); // This will make the field surrounded by double quotes but have no double quotes so it all appears in 1 cell in the CSV.
+//		row.push('"' + JSON.stringify([...sketch.trussStrokeIds]).replace(/"/g, '') + '"');
+//		row.push(sketch.containsTruss === ans.containsTruss);
+//		
+//		// Find if the strokeIds all match.
+//		var idsMatch = true; // Until we prove otherwise
+//		var tempAns = new Set(ans.trussStrokeIds);
+//		var tempSketch = new Set(sketch.trussStrokeIds);
+//		if (tempAns.size !== tempSketch.size) { // Different number of strokeIds, so no match.
+//			idsMatch = false;
+//		} else {
+//			for (var elem of tempAns) { // Stupid set iteration not using for in like a normal object...
+//				tempSketch.delete(elem);
+//			}
+//			idsMatch = tempSketch.size === 0; // If all ids match, then all will be removed and tempSketch.size will be 0.
+//		}
+//		row.push(idsMatch);
+//		
+//		// Update metrics
+//		if (sketch.containsTruss && ans.containsTruss) {
+//			TP++;
+//		} else if (!sketch.containsTruss && ans.containsTruss) { // Doesn't contain a truss, but answer says it does
+//			FP++;
+//		} else if (sketch.containsTruss && !ans.containsTruss) {
+//			FN++;
+//		} else {
+//			TN++;
+//		}
+//		if (idsMatch) { strokeIdMatches++; }
+//		
+//		rows.push(row);
+//	}
+//	
+//	function displayStats() {
+//		document.getElementById('TP').textContent = TP;
+//		document.getElementById('FP').textContent = FP;
+//		document.getElementById('FN').textContent = FN;
+//		document.getElementById('TN').textContent = TN;
+//		document.getElementById('strokeIdResults').textContent = 'StrokeIds matched for ' + strokeIdMatches + ' of ' + limit + ' total sketches.';
+//	}
+//	
+	var limit;
+	document.getElementById('start').addEventListener('click', function() {
+FP1 = 0;
+        FN1 = 0;
+        TP1 = 0;
+        TN1 = 0;
+
+        FP2 = 0;
+        FN2 = 0;
+        TP2 = 0;
+        TN2 = 0;
+        counter = 0;
+		strokeIdMatches = 0
+//        limit = sketchesArray.length
+//        counter = 0;
+//		strokeIdMatches = 0
+//        
+		//limit = parseInt(document.getElementById('limit').value);
+//		var location = document.querySelector('input[name=dataLocation]:checked').value;
+//		if (location === 'otherOnly') {
+//			getSketches('others.json'); // Empty string interpretation will get everything in the domain.
+//		} else if (location === 'trussOnly') {
+//			getSketches('trusses.json');
+//		} 
+        getSketches('data.json');
+	});
+    
+        
+//    //CODE TO VIEW SKETCHES ON CANVAS FOR DEBUG-------------------------------------------------------------
+//    //-------------------------------------------------------------------------------------------------------            
+//    var sketchIdToView;
+//    var localSketchContents;    
+//    document.getElementById('showSketch').addEventListener('click', function() {
+//        //parseInt(document.getElementById('limit').value);
+//        sketchIdToView = parseInt(document.getElementById('sketchNum').value);
+//        var location = document.querySelector('input[name=localDataLocation]:checked').value;
+//		if (location === 'nonTrussOnly') {
+//            localSketchContents = readJson("others.json");
+//		} else if (location === 'trussOnly') {
+//			localSketchContents = readJson("trusses.json");
+//        }
+//        var rangeLimit = localSketchContents.length
+//        if(sketchIdToView > rangeLimit){sketchIdToView = rangeLimit}
+//        else if (sketchIdToView === 0){sketchIdToView = 1}
+//        var sketchToView = localSketchContents[sketchIdToView-1]
+//        console.log(sketchToView)
+//        checkSketchForTruss(sketchToView,true)
+//        console.log('done')
+//        //visualizeSketch(sketchToView)
+//    });
+//                      
+////    function getSketchesFromServerToView(interpretation) {
+////		$.ajax({url: "http://srl-prod1.cs.tamu.edu:7750/getIds?domain=SketchRec2017HW2&interpretation=" + interpretation, success: function(result) {
+////			sketchIds = result;
+////			//if (limit > sketchIds.length) { limit = sketchIds.length; } // In case there are fewer sketches than the user selected limit.
+////			getSketchToView();
+////            
+////		}});
+////	}
+////        
+////        
+//        //var sketchToView;    
+//    function visualizeSketch(sketch, corners, reducedCorners, selectedStrokes, mergedPoints = false) {
+//        clearCanvas(previewCanvas, previewContext)
+//        previewSketch(sketch, "gray");
+//
+//        previewPoints(corners, "black");
+//
+//        // view selected strokes
+//        if (selectedStrokes) {        	
+//	        for (var i=0; i<selectedStrokes.length; i++) {
+//	        	previewPoints(selectedStrokes[i], "green");
+//	        }
+//        }
+//
+//        if (mergedPoints) {
+//        	previewPoints(mergedPoints, "blue", size = 10);        	
+//        } 
+//        previewPoints(reducedCorners, "red");
+//
+//    }
+//        
+//        previewCanvas = document.getElementById('previewCanvas');
+//        if (previewCanvas.getContext)
+//        previewContext = previewCanvas.getContext('2d');
+//        
+//        function showPreview() {
+//            document.getElementById('previewCanvas').style.display = "inline";	// show preview in document
+//            previewContext.clearRect(0, 0, width, height);		// clear the preview
+//        }
+//
+//        function previewSketch(sketch, color) {
+//  //
+//            var originalColor = this.strokeColor;					// save original color
+//            strokeColor = color;								// change color
+//          previewContext.fillStyle = color;
+//
+//            // iterate through each stroke
+//            var strokes = sketch.strokes;
+//            for (var i = 0; i < strokes.length; i++) {
+//                var points = strokes[i].points;
+//
+//                // iterate through each point in the stroke
+//                for (var j = 0; j < points.length - 1; j++) {
+//
+//                    var currPoint = points[j];
+//                    var nextPoint = points[j + 1];
+//                    drawLineSegment(previewContext, currPoint.x, currPoint.y, nextPoint.x, nextPoint.y, strokeColor, strokeSize);
+//                }
+//            }
+//          strokeColor = originalColor;						// revert color
+//          previewContext.fillStyle = strokeColor;
+//
+//        }
+//        
+//        function previewPoints(points, color, size = 5) {
+//            previewContext.fillStyle = color;						// change color
+//            for (var i = 0; i < points.length; i++) {
+//                var point = points[i];
+//                previewContext.beginPath();
+//                //this.previewContext.fillRect(point.x - 7, point.y - 7, 15, 15);
+//                previewContext.arc(point.x, point.y, size, 0, 2* Math.PI);
+//                previewContext.fill();
+//                previewContext.closePath();
+//            }
+//            previewContext.fillStyle = strokeColor;			// revert color
+//	   }
+//          // Draws a line between the specified position on the supplied canvas name
+//        // Parameters are: A canvas context, the x position, the y position, the size of the dot
+//        function updateCanvas(context, x, y) {
+//
+//          // If lastX is not set, set lastX and lastY to the current position
+//          if (lastX === -1) {
+//            lastX = x;
+//            lastY = y;
+//          }
+//
+//          // draw latest line segment
+//          drawLineSegment(context, lastX, lastY, x, y, strokeColor, strokeSize);
+//
+//          // Update the last position to reference the current position
+//          lastX = x;
+//          lastY = y;
+//        }
+//
+//        function clearCanvas(canvas, context) {
+//          //
+//          context.clearRect(0, 0, canvas.width, canvas.height);
+//            //document.getElementById('previewCanvas').style.display = "none";
+//        }
+//
+//        function drawLineSegment(context, x0, y0, x1, y1, color, size) {
+//          // Select a fill style
+//          context.strokeStyle = color;
+//          //ctx.strokeStyle = "rgba("+r+","+g+","+b+","+(a/255)+")";
+//
+//          // Set the line "cap" style to round, so lines at different angles can join into each other
+//          //context.lineCap = "round";
+//          //ctx.lineJoin = "round";
+//
+//          // Draw a filled line
+//          context.beginPath();
+//
+//          // First, move to the old (previous) position
+//          context.moveTo(x0, y0);
+//
+//          // Now draw a line to the current touch/pointer position
+//          context.lineTo(x1, y1);
+//
+//          // Set the line thickness and draw the line
+//          context.lineWidth = size;
+//          context.stroke();
+//
+//          context.closePath();
+//        }
+//        
+//                /**
+//         * Collects the current point.
+//         * @param {number} x - The current point's x-coordinate.
+//         * @param {number} y - The current point's y-coordinate.
+//         */
+//        function collectPoint(x, y) {
+//          // create the current point and add to the point collection
+//          var time = Date.now();     // create the time
+//          var point = {x: x, y: y, time: time};   // create the point
+//          DrawCanvasData.points.push(point);                     // add to point collection
+//        }
+//
+//        function collectStroke() {
+//          var stroke = {points: DrawCanvasData.points};
+//          DrawCanvasData.strokes.push(stroke);
+//          DrawCanvasData.points = [];
+//        }
+//
+//        function getSketch() {
+//          var sketch = {};
+//          sketch.strokes = DrawCanvasData.strokes;
+//          return sketch;
+//        }
+//
+//        function doNothing(sketch) {
+//          for (var i = 0; i < sketch.strokes.length; i++) {
+//            var points = strokes[i].points;
+//            for (var j = 0; j < points.length; j++) {
+//              var point = points[j];
+//              // do stuff
+//            }
+//          }
+//        }
+//
+//        //VARIABLES----------------------------------------------
+//        // Variables for referencing the canvas and 2dcanvas context
+//        var previewCanvas
+//        var previewContext
+//        // Size of the stroke
+//        var strokeSize = 3;
+//        var strokeColor = "black";
+//
+//        var DrawCanvasData = {
+//          points: [],
+//          strokes: [],
+//          sketch: {},
+//        };    
+//        
+//    //END OF CODE TO VIEW SKETCHES ON CANVAS FOR DEBUG----------------------------------------------------------
+//    //----------------------------------------------------------------------------------------------------------        
+	</script>
+</body>
+</html>
